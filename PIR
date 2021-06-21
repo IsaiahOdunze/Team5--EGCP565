@@ -1,0 +1,34 @@
+int  LAMP = 5;     // the LAMP is connected to PWM output 5
+int PIR = 2;        // connect PIR to digital input 2 --> D2
+
+int  PhotoSen = 0; // connect photo sensor to analog input0 A0
+
+int state = LOW;             // by default, no motion detected
+int Motion = 0;                 // variable to store the PIR status (Motionue)
+int PhotoSenVal;        // variable to store mapped PhotoSen value
+void setup() {
+  pinMode(LAMP, OUTPUT);      // assign LAMP as an output
+  pinMode(PIR, INPUT);    // assign PIR as an input
+}
+
+void loop() {
+
+  Motion = digitalRead(PIR);   // read PIR sensor to detect motion
+  if (Motion == HIGH) {           // check if the PIR is HIGH
+
+    PhotoSenVal = map(analogRead(PhotoSen), 50, 680, 255, 0);//read photo sensor and map to range
+    PhotoSenVal = constrain(PhotoSenVal, 0, 512);//rerange the photo sensor value
+    analogWrite(LAMP, PhotoSenVal);// write the mapped value to the lamp
+    delay(100);                // delay 100 milliseconds
+    if (state == LOW) {
+      state = HIGH;       // update variable state to HIGH
+    }
+  }
+  else {
+    digitalWrite(LAMP, LOW); // turn LAMP OFF
+    delay(50);             // delay 50 milliseconds
+    if (state == HIGH) {
+      state = LOW;       // update variable state to LOW
+    }
+  }
+}
