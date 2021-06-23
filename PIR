@@ -3,32 +3,41 @@ int PIR = 2;        // connect PIR to digital input 2 --> D2
 
 int  PhotoSen = 0; // connect photo sensor to analog input0 A0
 
-int state = LOW;             // by default, no motion detected
+/// state = LOW;             // by default, no motion detected
 int Motion = 0;                 // variable to store the PIR status (Motionue)
-int PhotoSenVal;        // variable to store mapped PhotoSen value
+float PhotoSenVal=0;        // variable to store mapped PhotoSen value
+
+//variables to calculate the no motion
+long int startnomtion;
+long int finishnomtion;
+long int nomotiontime=0;
+
 void setup() {
-  pinMode(LAMP, OUTPUT);      // assign LAMP as an output
-  pinMode(PIR, INPUT);    // assign PIR as an input
+  Serial.begin(9600); // to assign the serial port0 (monitot screen)
+  pinMode(LAMP, OUTPUT);      // assign LAMP (5) as an output port
+  pinMode(PIR, INPUT);    // assign PIR  (2) as an input port
 }
 
 void loop() {
 
   Motion = digitalRead(PIR);   // read PIR sensor to detect motion
-  if (Motion == HIGH) {           // check if the PIR is HIGH
-
-    PhotoSenVal = map(analogRead(PhotoSen), 50, 680, 255, 0);//read photo sensor and map to range
+  if (Motion == HIGH) 
+  {           // check if the PIR is HIGH at motion
+   PhotoSenVal=analogRead(PhotoSen);
+    PhotoSenVal = map(PhotoSenVal, 50, 680, 255, 0);//read photo sensor and map to range
     PhotoSenVal = constrain(PhotoSenVal, 0, 512);//rerange the photo sensor value
-    analogWrite(LAMP, PhotoSenVal);// write the mapped value to the lamp
-    delay(100);                // delay 100 milliseconds
-    if (state == LOW) {
-      state = HIGH;       // update variable state to HIGH
-    }
+    analogWrite(LAMP, PhotoSenVal);// write the mapped value of photosensor to the lamp
+    delay(10);                // delay 100 milliseconds
+
+    startnomtion = millis();//start the timing at motion detecting 
   }
-  else {
-    digitalWrite(LAMP, LOW); // turn LAMP OFF
-    delay(50);             // delay 50 milliseconds
-    if (state == HIGH) {
-      state = LOW;       // update variable state to LOW
-    }
+  else 
+  {                     //if no motion detect
+    finishnomtion = millis();//
+    nomotiontime = finishnomtion - startnomtion; //calculate time of no motion
+    // Serial.println(nomotiontime);
+    if (nomotiontime > 3000)//determine the light on time after no motion
+      digitalWrite(LAMP, LOW); // turn LAMP OFF after determine no motion time
+    delay(10);             // delay 50 milliseconds
   }
 }
