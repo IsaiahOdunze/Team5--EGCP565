@@ -12,7 +12,7 @@ void setup()
   Serial.begin(9600); //sets up serial monitor
   lcd.begin(16,2);
   Serial.println("Initialize RTC module");
-  // Initialize DS3231
+
   clock.begin();
 
   
