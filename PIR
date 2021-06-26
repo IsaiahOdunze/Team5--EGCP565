@@ -1,12 +1,3 @@
-int  LAMP = 5;     // the LAMP is connected to PWM output 5
-int PIR = 2;        // connect PIR to digital input 2 --> D2
-
-int  PhotoSen = 0; // connect photo sensor to analog input0 A0
-
-/// state = LOW;             // by default, no motion detected
-int Motion = 0;                 // variable to store the PIR status (Motionue)
-float PhotoSenVal=0;        // variable to store mapped PhotoSen value
-
 //variables to calculate the no motion
 long int startnomtion;
 long int finishnomtion;
