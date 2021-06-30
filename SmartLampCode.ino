@@ -1,14 +1,20 @@
-#define BLYNK_PRINT Serial
-#include <Adafruit_NeoPixel.h>
-#ifdef __AVR__
-#include <avr/power.h>
-#endif
+//#define BLYNK_PRINT Serial
+#include <FastLED.h>
+
+#define LED_PIN     6
+#define NUM_LEDS    60
+#define BRIGHTNESS  255
+#define LED_TYPE    WS2812
+#define COLOR_ORDER RGB
+CRGB leds[NUM_LEDS];
+#define UPDATES_PER_SECOND 100
 #define PIN 6 //for the led strip
 #define inputPin 7 // for the PIRSensor
 #define lightPin A0 //for the photoresistor
 
 #include <ESP8266_Lib.h>
 #include <BlynkSimpleShieldEsp8266.h>
+
 
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
@@ -31,36 +37,52 @@ SoftwareSerial EspSerial(2, 3); // RX, TX
 #define ESP8266_BAUD 9600
 
 ESP8266 wifi(&EspSerial);
-// Parameter 1 = number of pixels in strip
-// Parameter 2 = Arduino pin number (most are valid)
-// Parameter 3 = pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, PIN, NEO_GRB + NEO_KHZ800);
 
-
+//For Light
 bool pinValue; //used to switch LED on or off
 uint8_t r, g, b; ///set LED Colors
+int brightness;
+
+//for smart lighting
+uint16_t smartLighting;//for lighting using photoresistor
+uint16_t lightVal;//light intensity
 bool pirState = LOW;  // we start, assuming no motion detected for PIR sensor
 bool pir_val = 0;//assuming no motion initially
 
-uint16_t smartLighting;//for lighting using photoresistor
-uint16_t lightVal;//light intensity
-bool theaterMode;//theater mode feature for led lights
-
+//For custom color picker
 uint8_t colorChoice;
 
+//For light settings
+uint8_t sendSetting;
+uint8_t lightSetting;
+uint8_t brightSetting;
+uint8_t lightingIndex;
+uint8_t rSetting, gSetting, bSetting;
+bool turnOnLighting;
+char* optionName;
+String l_name;
+char* options[10] = {"List-Item1", "List-Item2", "List-Item3", "List-Item4", "List-Item5", "List-Item6", "List-Item7", "List-Item8", "List-Item9", "List-Item10"};
+uint8_t brightArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t redArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t greenArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t blueArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
 //variables to calculate the no motion
-long int finishnomtion = 0;
-long int nomotiontime = 0;
-long int startmotion = 0;
+int finishnomtion = 0;
+int nomotiontime = 0;
+int startmotion = 0;
 
 
 BLYNK_CONNECTED() {
   Blynk.syncAll();
+}
+
+BLYNK_WRITE(V0) {
+  if (pinValue == 1) {
+    brightness = param.asInt();
+    FastLED.setBrightness(brightness);
+    colorLoop(r, g, b);
+  }
 }
 
 BLYNK_WRITE(V1)//virtual pin that sets turns the led on or off.
@@ -74,10 +96,10 @@ BLYNK_WRITE(V1)//virtual pin that sets turns the led on or off.
   // Serial.print("V1 Slider value is: ");
   // Serial.println(pinValue);
   if (pinValue == true) {
-    colorWipe(strip.Color(r, g, b), 50);
+    colorLoop(r, g, b);
   }
   else {
-    colorWipe(strip.Color(0, 0, 0), 50); // off
+    colorLoop(0, 0, 0); // off
   }
 }
 BLYNK_WRITE(V2)// set the color of our led
@@ -97,200 +119,169 @@ BLYNK_WRITE(V2)// set the color of our led
   //  Serial.print(", b : ");
   //  Serial.println(b);
   if (pinValue == 1) {
-    colorWipe(strip.Color(r, g, b), 50); // turn on
+    colorLoop(r, g, b); //change color
   }
 }
 
-  BLYNK_READ(V3) { //
+BLYNK_READ(V3) { //
+  if (smartLighting == 1) { ///check if smart lighting is on
     pir_val = digitalRead(inputPin);//check motion
     lightVal = analogRead(lightPin);//check ligght intensity
     Blynk.virtualWrite(V3, pir_val);
-    if (smartLighting == 1) { ///check if smart lighting is on
-      if (pinValue == 1) {//if LED is initially on
-        if (lightVal > 750) { // turn off because room is already bright
-          colorWipe(strip.Color(0, 0, 0), 50); //turn off
-          Blynk.virtualWrite(V1, 0);//turn blynk app button off
-          Blynk.notify("Smart Lighting : turning LED OFF");
-          pinValue = 0;
-        }
-        else if (lightVal < 300 && pir_val == 0) {
-          finishnomtion++;//
-          nomotiontime = finishnomtion - startmotion; //calculate time of no motion
-          if (nomotiontime == 10) {
-            colorWipe(strip.Color(0, 0, 0), 50); //turn off
-            Blynk.virtualWrite(V1, 0);//turn blynk app button off
-            Blynk.notify("Smart Lighting : turning LED OFF");
-            pinValue = 0;
-          }
-          //delay(1000);
-          startmotion = 0;//start the timing at motion detecting
-          startmotion++;
-          finishnomtion = 0;
-        }
-        else if (lightVal < 300 && pir_val == 1) {//reset timer
-          nomotiontime = 0;
-          startmotion = 0;//start the timing at motion detecting
-          startmotion++;
-          finishnomtion = 0;
-        }
+    if (pinValue == 1) {//if LED is initially on
+      if (lightVal > 750) { // turn off because room is already bright
+        colorLoop(0, 0, 0); //turn off
+        Blynk.virtualWrite(V1, 0);//turn blynk app button off
+        Blynk.notify("Smart Lighting : turning LED OFF-Saving 3.6W");
+        pinValue = 0;
       }
-      else {// if LED is intitally off
-        if (lightVal < 300 && pir_val == 1) {
-          colorWipe(strip.Color(r, g, b), 50); // turn on
-          Blynk.virtualWrite(V1, 1); //turn led buttion on
-          Blynk.notify("Smart Lighting : turning LED ON");
-          pinValue = 1;
-        }
+      else if (lightVal < 300 && pir_val == 0) {
+        //finishnomtion++;//
+        //nomotiontime = finishnomtion - startmotion; //calculate time of no motion
+        //        Serial.print("no Motion time : ");
+        //        Serial.println(nomotiontime);
+        //if (nomotiontime == 5) {
+        colorLoop(0, 0, 0); //turn off
+        Blynk.virtualWrite(V1, 0);//turn blynk app button off
+        Blynk.notify("Smart Lighting : turning LED OFF-Saving 3.6W");
+        pinValue = 0;
+        // }
+        //delay(1000);
+        //        startmotion = 0;//start the timing at motion detecting
+        //        startmotion++;
+        //        finishnomtion = 0;
+      }
+      else if (lightVal < 300 && pir_val == 1) {//reset timer
+        //        nomotiontime = 0;
+        //        startmotion = 0;//start the timing at motion detecting
+        //        startmotion++;
+        //        finishnomtion = 0;
       }
     }
-  }
-
-
-  BLYNK_WRITE(V4)// turn on smart lighting
-  {
-    smartLighting = param.asInt();//check smart lighting value
-  
-  }
-
-  BLYNK_WRITE(V6)// color Setter
-  {
-    if (pinValue == 1) {//only if led is on
-      colorChoice = param.asInt();
-      // Serial.println(colorChoice);
-      colorChoice = colorChoice - 1;
-      //colorPicker = param.asStr();
-      //  Serial.print("Color: ");
-      //  Serial.print(color);
-      //  Serial.print(" Length: ");
-      //  Serial.println(color.length());
-      r, g, b = colorPicker(colorChoice);
-      //    Serial.print(r);
-      //    Serial.print(" ");
-      //    Serial.print(g);
-      //    Serial.print(" ");
-      //    Serial.println(b);
-      colorWipe(strip.Color(r, g, b), 50);
-    }
-  }
-
-
-  void setup()
-  {
-    // Debug console
-    Serial.begin(9600);
-
-    // Set ESP8266 baud rate
-    EspSerial.begin(ESP8266_BAUD);
-    delay(10);
-    // You can also specify server:
-    //Blynk.begin(auth, wifi, ssid, pass, "blynk-cloud.com", 80);
-    //Blynk.begin(auth, wifi, ssid, pass, IPAddress(192,168,1,100), 8080);
-    // your hardware gets connected to Blynk Server
-    setupLED();
-    pinMode(inputPin, INPUT); // declare PIR sensor as input
-    pinMode(lightVal, INPUT); // declare photoresistor as input
-    Blynk.begin(auth, wifi, ssid, pass);
-  }
-
-  void loop()
-  {
-    Blynk.run();
-  }
-
-  void setupLED() {
-    // This is for Trinket 5V 16MHz, you can remove these three lines if you are not using a Trinket
-#if defined (__AVR_ATtiny85__)
-    if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
-#endif
-    // End of trinket special code
-
-    strip.begin();
-    strip.setBrightness(50);
-    strip.show(); // Initialize all pixels to 'off'
-  }
-
-  //Fill the dots one after the other with a color
-  void colorWipe(uint32_t c, uint8_t wait) {
-    for (uint16_t i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, c);
-      strip.show();
-      delay(wait);
-    }
-    //strip.show();
-  }
-
-  void rainbow(uint8_t wait) {
-    uint16_t i, j;
-
-    for (j = 0; j < 256; j++) {
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, Wheel((i + j) & 255));
-      }
-      strip.show();
-      delay(wait);
-    }
-  }
-
-  // Slightly different, this makes the rainbow equally distributed throughout
-  void rainbowCycle(uint8_t wait) {
-    uint16_t i, j;
-
-    for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
-      for (i = 0; i < strip.numPixels(); i++) {
-        strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-      }
-      strip.show();
-      delay(wait);
-    }
-  }
-
-  //Theatre-style crawling lights.
-  void theaterChase(uint32_t c, uint8_t wait) {
-    for (int j = 0; j < 10; j++) { //do 10 cycles of chasing
-      for (int q = 0; q < 3; q++) {
-        for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-          strip.setPixelColor(i + q, c);  //turn every third pixel on
-        }
-        strip.show();
-
-        delay(wait);
-
-        for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-          strip.setPixelColor(i + q, 0);      //turn every third pixel off
-        }  // your hardware gets connected to Blynk Server
+    else {// if LED is intitally off
+      if (lightVal < 300 && pir_val == 1) {
+        colorLoop(r, g, b); // turn on
+        Blynk.virtualWrite(V1, 1); //turn led buttion on
+        Blynk.notify("Smart Lighting : turning LED ON");
+        pinValue = 1;
       }
     }
   }
-
-  //Theatre-style crawling lights with rainbow effect
-  void theaterChaseRainbow(uint8_t wait) {
-    for (int j = 0; j < 256; j++) {   // cycle all 256 colors in the wheel
-      for (int q = 0; q < 3; q++) {
-        for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-          strip.setPixelColor(i + q, Wheel( (i + j) % 255)); //turn every third pixel on
-        }
-        strip.show();
-
-        delay(wait);
-
-        for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-          strip.setPixelColor(i + q, 0);      //turn every third pixel off
-        }
-      }
-    }
+  else {
+    Blynk.virtualWrite(V3, 0);
   }
+}
 
-  // Input a value 0 to 255 to get a color value.
-  // The colours are a transition r - g - b - back to r.
-  uint32_t Wheel(byte WheelPos) {
-    WheelPos = 255 - WheelPos;
-    if (WheelPos < 85) {
-      return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-    }
-    if (WheelPos < 170) {
-      WheelPos -= 85;
-      return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-    }
-    WheelPos -= 170;
-    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+
+BLYNK_WRITE(V4)// turn on smart lighting
+{
+  smartLighting = param.asInt();
+}
+
+BLYNK_WRITE(V5) {
+  sendSetting = param.asInt();
+  if (sendSetting == 1) {
+    //    //saveColor
+    r, g, b = colorPicker(colorChoice);
+    rSetting = r;
+    gSetting = g;
+    bSetting = b;
+    redArr[lightingIndex] = rSetting;
+    greenArr[lightingIndex] = gSetting;
+    blueArr[lightingIndex] = bSetting;
+    //    Serial.print("R,G,B : ");
+    //    Serial.print(redArr[lightingIndex]);
+    //    Serial.print(" , ");
+    //    Serial.print(greenArr[lightingIndex]);
+    //    Serial.print(" , ");
+    //    Serial.print(blueArr[lightingIndex]);
+    //    Serial.print(" , br: ");
+    //save brightness
+    brightArr[lightingIndex] = brightSetting;
+    //    Serial.print(brightArr[lightingIndex]);
+    //    Serial.print(" , ");
+    //save name
+     strcpy(options[lightingIndex], optionName);
+    //options[lightingIndex] = optionName;
+    //    Serial.print("Option Name: ");
+    //    Serial.println(options[lightingIndex]);
+    Blynk.setProperty(V8, "labels", options[0], options[1], options[2], options[3], options[4], options[5], options[6], options[7], options[8], options[9]);
+   // Blynk.notify("Light Setting received");
+    //Blynk.virtualWrite(V5,0);
+    //sendSetting = 0;
   }
+}
+
+
+BLYNK_WRITE(V6)// color Setter
+{
+  colorChoice = param.asInt();
+}
+BLYNK_WRITE(V7) {//Turn on specific lighting
+  turnOnLighting = param.asInt();
+  if (turnOnLighting == 1) {
+    FastLED.setBrightness(brightArr[lightSetting]);
+    colorLoop(redArr[lightSetting], greenArr[lightSetting], blueArr[lightSetting]);
+    //set all these values
+    Blynk.notify("Specific Light Settings on");
+  }
+}
+BLYNK_WRITE(V8) {//which lightSetting we want to turn set
+  lightSetting = param.asInt();
+  lightSetting = lightSetting - 1;
+}
+BLYNK_WRITE(V9) {//light settings option name
+  l_name = (param.asStr());
+  optionName = l_name.c_str();
+}
+
+BLYNK_WRITE(V10) {//light settings option index
+  lightingIndex = param.asInt();
+  lightingIndex = lightingIndex - 1;;
+}
+BLYNK_WRITE(V11) {//light settings brightness
+  brightSetting = param.asInt();
+}
+
+void setup()
+{
+  // Debug console
+  //Serial.begin(9600);
+  // Set ESP8266 baud rate
+  EspSerial.begin(ESP8266_BAUD);
+  delay(10);
+  // You can also specify server:
+  //Blynk.begin(auth, wifi, ssid, pass, "blynk-cloud.com", 80);
+  //Blynk.begin(auth, wifi, ssid, pass, IPAddress(192,168,1,100), 8080);
+  // your hardware gets connected to Blynk Server
+  setupLED();
+  pinMode(inputPin, INPUT); // declare PIR sensor as input
+  pinMode(lightVal, INPUT); // declare photoresistor as input
+  Blynk.begin(auth, wifi, ssid, pass);
+}
+
+void loop()
+{
+  Blynk.run();
+
+}
+
+void setupLED() {
+  delay( 3000 ); // power-up safety delay
+  FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
+  FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
+  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.clear();
+  FastLED.show();
+}
+void colorLoop(uint8_t red, uint8_t green, uint8_t blue) {
+  for ( int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = CRGB(green, red, blue);
+    FastLED.show();
+  }
+}
+
+char* changeToChar(String names) {
+  char* theName = names.c_str();
+  return theName;
+}
