@@ -57,9 +57,9 @@ uint8_t sendSetting;
 uint8_t lightSetting;
 uint8_t brightSetting;
 uint8_t lightingIndex;
-uint8_t rSetting, gSetting, bSetting;
 bool turnOnLighting;
-char* optionName;
+uint8_t rSetting, gSetting, bSetting;
+//char* optionName;
 String l_name;
 char* options[10] = {"List-Item1", "List-Item2", "List-Item3", "List-Item4", "List-Item5", "List-Item6", "List-Item7", "List-Item8", "List-Item9", "List-Item10"};
 uint8_t brightArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -68,10 +68,10 @@ uint8_t greenArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 uint8_t blueArr[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 //variables to calculate the no motion
-int finishnomtion = 0;
-int nomotiontime = 0;
-int startmotion = 0;
-
+//int finishnomtion = 0;
+//int nomotiontime = 0;
+//int startmotion = 0;
+//
 
 BLYNK_CONNECTED() {
   Blynk.syncAll();
@@ -89,16 +89,10 @@ BLYNK_WRITE(V1)//virtual pin that sets turns the led on or off.
 {
 
   pinValue = param.asInt(); // assigning incoming value from pin V1 to a variable
-  // You can also use:
-  // String i = param.asStr();
-  // double d = param.asDouble();
-
-  // Serial.print("V1 Slider value is: ");
-  // Serial.println(pinValue);
-  if (pinValue == true) {
+  if (pinValue == 1) {
     colorLoop(r, g, b);
   }
-  else {
+  else if (pinValue == 0 && turnOnLighting == 0) {
     colorLoop(0, 0, 0); // off
   }
 }
@@ -107,17 +101,6 @@ BLYNK_WRITE(V2)// set the color of our led
   r = param[0].asInt(); // assigning r value
   g = param[1].asInt(); // assigning g value
   b = param[2].asInt(); // assigning b value
-  // You can also use:
-  // String i = param.asStr();
-  // double d = param.asDouble();
-  //
-  //  Serial.print("V2 Slider value is: ");
-  //  Serial.print("r : ");
-  //  Serial.print(r);
-  //  Serial.print(", g : ");
-  //  Serial.print(g);
-  //  Serial.print(", b : ");
-  //  Serial.println(b);
   if (pinValue == 1) {
     colorLoop(r, g, b); //change color
   }
@@ -132,37 +115,34 @@ BLYNK_READ(V3) { //
       if (lightVal > 750) { // turn off because room is already bright
         colorLoop(0, 0, 0); //turn off
         Blynk.virtualWrite(V1, 0);//turn blynk app button off
-        Blynk.notify("Smart Lighting : turning LED OFF-Saving 3.6W");
+        Blynk.notify("Bright Room : turning LED OFF-Saving 3.6W");
         pinValue = 0;
       }
       else if (lightVal < 300 && pir_val == 0) {
-        //finishnomtion++;//
+        //        finishnomtion++;//
         //nomotiontime = finishnomtion - startmotion; //calculate time of no motion
         //        Serial.print("no Motion time : ");
         //        Serial.println(nomotiontime);
-        //if (nomotiontime == 5) {
         colorLoop(0, 0, 0); //turn off
         Blynk.virtualWrite(V1, 0);//turn blynk app button off
-        Blynk.notify("Smart Lighting : turning LED OFF-Saving 3.6W");
+        Blynk.notify("No Motion : turning LED OFF-Saving 3.6W");
         pinValue = 0;
-        // }
-        //delay(1000);
-        //        startmotion = 0;//start the timing at motion detecting
-        //        startmotion++;
-        //        finishnomtion = 0;
+        //          startmotion = 0;//start the timing at motion detecting
+        //          startmotion++;
+        //          finishnomtion = 0;
       }
       else if (lightVal < 300 && pir_val == 1) {//reset timer
-        //        nomotiontime = 0;
-        //        startmotion = 0;//start the timing at motion detecting
-        //        startmotion++;
-        //        finishnomtion = 0;
+        //          nomotiontime = 0;
+        //          startmotion = 0;//start the timing at motion detecting
+        //          startmotion++;
+        //          finishnomtion = 0;
       }
     }
     else {// if LED is intitally off
       if (lightVal < 300 && pir_val == 1) {
         colorLoop(r, g, b); // turn on
         Blynk.virtualWrite(V1, 1); //turn led buttion on
-        Blynk.notify("Smart Lighting : turning LED ON");
+        Blynk.notify("Motion Detected : turning LED ON");
         pinValue = 1;
       }
     }
@@ -182,33 +162,18 @@ BLYNK_WRITE(V5) {
   sendSetting = param.asInt();
   if (sendSetting == 1) {
     //    //saveColor
-    r, g, b = colorPicker(colorChoice);
-    rSetting = r;
-    gSetting = g;
-    bSetting = b;
+    colorPicker(colorChoice, rSetting, gSetting, bSetting);
     redArr[lightingIndex] = rSetting;
     greenArr[lightingIndex] = gSetting;
     blueArr[lightingIndex] = bSetting;
-    //    Serial.print("R,G,B : ");
-    //    Serial.print(redArr[lightingIndex]);
-    //    Serial.print(" , ");
-    //    Serial.print(greenArr[lightingIndex]);
-    //    Serial.print(" , ");
-    //    Serial.print(blueArr[lightingIndex]);
-    //    Serial.print(" , br: ");
     //save brightness
-    brightArr[lightingIndex] = brightSetting;
-    //    Serial.print(brightArr[lightingIndex]);
-    //    Serial.print(" , ");
-    //save name
-     strcpy(options[lightingIndex], optionName);
-    //options[lightingIndex] = optionName;
-    //    Serial.print("Option Name: ");
-    //    Serial.println(options[lightingIndex]);
-    Blynk.setProperty(V8, "labels", options[0], options[1], options[2], options[3], options[4], options[5], options[6], options[7], options[8], options[9]);
-   // Blynk.notify("Light Setting received");
-    //Blynk.virtualWrite(V5,0);
-    //sendSetting = 0;
+     brightArr[lightingIndex] = brightSetting;
+    //    //save name
+        strcpy(options[lightingIndex], l_name.c_str());
+        Blynk.setProperty(V8, "labels", options[0], options[1], options[2], options[3], options[4], options[5], options[6], options[7], options[8], options[9]);
+        Blynk.notify("Light Setting received");
+    Blynk.virtualWrite(V5, 0);
+    sendSetting = 0;
   }
 }
 
@@ -216,14 +181,17 @@ BLYNK_WRITE(V5) {
 BLYNK_WRITE(V6)// color Setter
 {
   colorChoice = param.asInt();
+
 }
 BLYNK_WRITE(V7) {//Turn on specific lighting
   turnOnLighting = param.asInt();
   if (turnOnLighting == 1) {
     FastLED.setBrightness(brightArr[lightSetting]);
     colorLoop(redArr[lightSetting], greenArr[lightSetting], blueArr[lightSetting]);
-    //set all these values
     Blynk.notify("Specific Light Settings on");
+  }
+  else if (pinValue == 0 && turnOnLighting == 0) {
+    colorLoop(0, 0, 0); // off
   }
 }
 BLYNK_WRITE(V8) {//which lightSetting we want to turn set
@@ -231,13 +199,13 @@ BLYNK_WRITE(V8) {//which lightSetting we want to turn set
   lightSetting = lightSetting - 1;
 }
 BLYNK_WRITE(V9) {//light settings option name
-  l_name = (param.asStr());
-  optionName = l_name.c_str();
+  l_name = param.asStr();
+  //optionName = l_name.c_str();
 }
 
 BLYNK_WRITE(V10) {//light settings option index
   lightingIndex = param.asInt();
-  lightingIndex = lightingIndex - 1;;
+  lightingIndex = lightingIndex - 1;
 }
 BLYNK_WRITE(V11) {//light settings brightness
   brightSetting = param.asInt();
@@ -279,9 +247,4 @@ void colorLoop(uint8_t red, uint8_t green, uint8_t blue) {
     leds[i] = CRGB(green, red, blue);
     FastLED.show();
   }
-}
-
-char* changeToChar(String names) {
-  char* theName = names.c_str();
-  return theName;
 }
